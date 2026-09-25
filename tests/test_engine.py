@@ -1,6 +1,6 @@
 import asyncio
 from decimal import Decimal
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -31,12 +31,14 @@ async def test_start_market_ticker_worker_cycle():
         status=AlertStatus.ACTIVE,
     )
 
-    mock_session = AsyncMock()
-    mock_result = AsyncMock()
+    mock_result = MagicMock()
     mock_result.scalars.return_value.all.return_value = [mock_alert]
-    mock_session.execute.return_value = mock_result
 
-    mock_session_context = AsyncMock()
+    mock_session = AsyncMock()
+    mock_session.execute.return_value = mock_result
+    mock_session.commit = AsyncMock()
+
+    mock_session_context = MagicMock()
     mock_session_context.__aenter__.return_value = mock_session
     mock_session_context.__aexit__.return_value = None
 
