@@ -83,4 +83,6 @@ async def start_market_ticker_worker(interval_seconds: int = 15) -> None:
             await asyncio.sleep(interval_seconds)
     except asyncio.CancelledError:
         logger.info("Worker detenido limpiamente.")
+
+
 raise
