@@ -26,7 +26,7 @@
 
 ### 1. Clonar el repositorio y configurar variables de entorno
 bash
-git clone https://github.com/TU_USUARIO/finpulse.git
+git clone https://github.com/AlonsoGomezTapia/finpulse.git
 cd finpulse
 cp .env.example .env
 
