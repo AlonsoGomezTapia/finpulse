@@ -2,87 +2,57 @@ import asyncio
 import logging
 from decimal import Decimal
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+import httpx
 
+from app.core.config import settings
 from app.db.session import AsyncSessionLocal
-from app.models.alert import AlertRule, AlertStatus, ConditionType
+from app.services.alert_service import AlertService
 
-logger = logging.getLogger("finpulse.engine")
-
-
-class AlertEvaluationEngine:
-    """Motor asincrono para evaluar reglas frente a cotizaciones de mercado."""
-
-    async def evaluate_price(
-        self,
-        db: AsyncSession,
-        symbol: str,
-        current_price: Decimal,
-    ) -> list[AlertRule]:
-        query = select(AlertRule).where(
-            AlertRule.symbol == symbol,
-            AlertRule.status == AlertStatus.ACTIVE,
-            AlertRule.is_deleted.is_(False),
-        )
-        result = await db.execute(query)
-        active_rules = result.scalars().all()
-
-        triggered_alerts: list[AlertRule] = []
-
-        for rule in active_rules:
-            should_trigger = False
-            if (
-                rule.condition == ConditionType.GREATER_THAN
-                and current_price >= rule.threshold_price
-            ):
-                should_trigger = True
-            elif (
-                rule.condition == ConditionType.LESS_THAN
-                and current_price <= rule.threshold_price
-            ):
-                should_trigger = True
-
-            if should_trigger:
-                rule.status = AlertStatus.TRIGGERED
-                triggered_alerts.append(rule)
-                logger.warning(
-                    "ALERTA DISPARADA: [%s] Precio: %s %s Umbral: %s (Destino: %s)",
-                    rule.symbol,
-                    current_price,
-                    rule.condition.value,
-                    rule.threshold_price,
-                    rule.notification_email,
-                )
-
-        if triggered_alerts:
-            await db.commit()
-
-        return triggered_alerts
+logger = logging.getLogger(__name__)
 
 
-async def start_market_ticker_worker(interval_seconds: int = 15) -> None:
-    engine = AlertEvaluationEngine()
-    logger.info("Iniciando Market Ticker Background Worker...")
-
-    sample_quotes = {
-        "BTC-USD": Decimal("67500.0000"),
-        "AAPL": Decimal("225.5000"),
-        "ETH-USD": Decimal("3500.2500"),
+async def fetch_mock_market_price(symbol: str) -> Decimal:
+    """Simula la obtención de precios de mercado con httpx."""
+    mock_prices = {
+        "BTC-USD": Decimal("68500.00"),
+        "ETH-USD": Decimal("3550.00"),
+        "AAPL": Decimal("185.50"),
     }
+    await asyncio.sleep(0.01)
+    return mock_prices.get(symbol.upper(), Decimal("100.00"))
+
+
+async def start_market_ticker_worker() -> None:
+    """Worker continuo en background que evalua reglas de mercado."""
+    logger.info("Iniciando worker de evaluacion de mercado...")
+    client = httpx.AsyncClient(timeout=settings.API_TIMEOUT_SECONDS)
+    service = AlertService()
 
     try:
         while True:
             try:
                 async with AsyncSessionLocal() as session:
-                    for symbol, base_price in sample_quotes.items():
-                        await engine.evaluate_price(session, symbol, base_price)
-            except Exception as e:
-                logger.error("Error en ciclo del worker: %s", str(e))
+                    symbols = ["BTC-USD", "ETH-USD", "AAPL"]
+                    for sym in symbols:
+                        current_price = await fetch_mock_market_price(sym)
+                        triggered_count = await service.evaluate_and_trigger(
+                            db=session,
+                            symbol=sym,
+                            current_price=current_price,
+                        )
+                        if triggered_count > 0:
+                            logger.info(
+                                "Disparadas %d alertas para %s a un precio de %s",
+                                triggered_count,
+                                sym,
+                                current_price,
+                            )
+            except Exception as exc:
+                logger.error("Error durante ciclo del worker de mercado: %s", exc)
 
-            await asyncio.sleep(interval_seconds)
+            await asyncio.sleep(settings.MARKET_TICKER_INTERVAL_SECONDS)
     except asyncio.CancelledError:
         logger.info("Worker detenido limpiamente.")
-
-
-raise
+        raise
+    finally:
+        await client.aclose()
