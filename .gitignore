@@ -1,0 +1,32 @@
+# Entornos virtuales
+.venv/
+venv/
+ENV/
+
+# Bytecode de Python y caché
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Cobertura y reportes
+.coverage
+htmlcov/
+
+# Variables de entorno sensibles (NUNCA versionar)
+.env
+.env.local
+*.env
+
+# Bases de datos y archivos de prueba locales
+*.db
+*.sqlite3
+
+# IDEs
+.vscode/
+.idea/
+*.egg-info/
+.coverage
+coverage.xml
